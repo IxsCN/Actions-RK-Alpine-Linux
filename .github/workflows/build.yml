@@ -100,7 +100,8 @@ jobs:
 
     strategy:
       matrix:
-        CPU: [rk3328, rk3528, rk3399, rk3566, rk3568, rk3576, rk3588]
+        # NanoPi NEO3 and R4S; configs/dae.config targets their Linux 6.6 kernels.
+        CPU: [rk3328, rk3399]
     steps:
     - name: Checkout
       uses: actions/checkout@main
@@ -122,6 +123,10 @@ jobs:
         sudo swapoff -a
         sudo rm -rf /usr/share/dotnet /usr/local/lib/android/sdk /usr/local/share/boost /opt/ghc
         echo "cores: $(nproc)"
+        # Host tools needed to generate kernel BTF for dae.
+        sudo apt-get update
+        sudo apt-get install -y dwarves libelf-dev
+        pahole --version
         git clone https://github.com/friendlyarm/prebuilts.git -b master --depth 1
         cd prebuilts/gcc-x64
         sudo tar xf toolchain-11.3-aarch64.tar.xz -C /
@@ -182,7 +187,7 @@ jobs:
         fi
 
         cd sd-fuse
-        sudo -u root bash -c '
+        sudo -u root bash -e -c '
           OS_DIR=alpine-linux-arm64
           mkdir ${OS_DIR}
 
@@ -194,13 +199,16 @@ jobs:
           if [ -f ../../plat/${{ matrix.CPU }}/custom.sh ]; then
             ../../plat/${{ matrix.CPU }}/custom.sh $PWD/rootfs
           fi
-          cp -af ../../plat/rockchip-common/alsa/* $PWD/rootfs/
+          # The upstream repository may not include optional ALSA overrides.
+          if [ -d ../../plat/rockchip-common/alsa ]; then
+            cp -af ../../plat/rockchip-common/alsa/. "$PWD/rootfs/"
+          fi
 
           # build uboot
           UBOOT_SRC=uboot ./build-uboot.sh ${OS_DIR}
 
-          # build kernel
-          DISABLE_MKIMG=1 KERNEL_SRC=kernel ./build-kernel.sh ${OS_DIR}
+          # Build and verify the dae-enabled kernel before packaging.
+          bash ../../scripts/build-dae-kernel.sh "${{ matrix.CPU }}" "${OS_DIR}"
           TMP_DIR=$(mktemp -d out/boot.XXXXXXXXX)
           ./tools/setup_boot_and_rootfs.sh uboot kernel ${TMP_DIR} rootfs ./prebuilt ${OS_DIR}
 
