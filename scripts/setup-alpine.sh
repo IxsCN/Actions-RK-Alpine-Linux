@@ -1,4 +1,5 @@
 #!/bin/sh
+set -eu
 export LANG="en_US.UTF-8"
 export LANGUAGE=en_US:en
 export LC_NUMERIC="C"
@@ -6,10 +7,19 @@ export LC_CTYPE="C"
 export LC_MESSAGES="C"
 export LC_ALL="C"
 
+# Enable the release-matched community repo before installing extra packages.
+cat << 'EOL' > /etc/apk/repositories
+https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+EOL
+
 apk update
 apk add --no-cache openrc bash
 apk add --no-cache alpine-base
 apk add --no-cache util-linux
+# Install only: Tailscale enrollment and service activation remain user-controlled.
+# Alpine names the requested kitty terminfo package kitty-terminfo.
+apk add --no-cache htop tio kitty-terminfo tailscale
 rc-update add bootmisc boot
 rc-update add syslog default
 rc-update add crond default
@@ -39,12 +49,6 @@ echo "alpine" > /etc/hostname
 cat << 'EOL' > /etc/hosts
 127.0.0.1       alpine.my.domain alpine localhost.localdomain localhost
 ::1             localhost localhost.localdomain
-EOL
-
-# Set up mirror
-cat << 'EOL' > /etc/apk/repositories
-http://mirrors.aliyun.com/alpine/v3.23/main
-http://mirrors.aliyun.com/alpine/v3.23/community
 EOL
 
 # run setup-alpine quick mode

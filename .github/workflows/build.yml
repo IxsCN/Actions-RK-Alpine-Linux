@@ -1,6 +1,10 @@
 on:
+  workflow_dispatch:
   watch:
     types: started
+permissions:
+  contents: write
+
 jobs:
   prepare_release:
     runs-on: ubuntu-22.04
@@ -67,7 +71,10 @@ jobs:
           cp ../scripts/setup-alpine.sh rootfs/
           source ../scripts/set_chroot_env.sh
           mount_chroot_env rootfs
-          LANG=C chroot rootfs /setup-alpine.sh
+          LANG=C chroot rootfs /setup-alpine.sh || {
+            umount_chroot_env rootfs
+            exit 1
+          }
           umount_chroot_env rootfs
           # clean
           rm -f rootfs/setup-alpine.sh
@@ -99,6 +106,7 @@ jobs:
     if: github.event.repository.owner.id == github.event.sender.id
 
     strategy:
+      fail-fast: false
       matrix:
         # NanoPi NEO3 and R4S; configs/dae.config targets their Linux 6.6 kernels.
         CPU: [rk3328, rk3399]
@@ -204,6 +212,12 @@ jobs:
             cp -af ../../plat/rockchip-common/alsa/. "$PWD/rootfs/"
           fi
 
+          # Download before expensive compilation; preserve eMMC image support.
+          timeout 20m wget --connect-timeout=15 --read-timeout=60 --tries=3 \
+            -O emmc-flasher-images.tgz \
+            "https://downloads.friendlyelec.com/os-images/${{ matrix.CPU }}/images/emmc-flasher-images.tgz"
+          tar -tzf emmc-flasher-images.tgz > /dev/null
+
           # build uboot
           UBOOT_SRC=uboot ./build-uboot.sh ${OS_DIR}
 
@@ -230,7 +244,6 @@ jobs:
           # build sd-to-emmc image
           FILENAME_SD2EMMC=${{ matrix.CPU }}-eflasher-alpine-linux-arm64-$(date +%Y-%m-%d).img
           echo "##[set-output name=img_filename_sd2emmc;]$FILENAME_SD2EMMC"
-          wget http://112.124.9.243/dvdfiles/${{ matrix.CPU }}/images-for-eflasher/emmc-flasher-images.tgz
           tar xzf emmc-flasher-images.tgz
           RAW_SIZE_MB=8000 ./mk-emmc-image.sh ${OS_DIR} filename=${FILENAME_SD2EMMC} autostart=yes
           mv out/${FILENAME_SD2EMMC} ../../artifact/

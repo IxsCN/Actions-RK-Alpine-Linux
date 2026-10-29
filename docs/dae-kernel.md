@@ -19,7 +19,18 @@
 
 编译后会检查最终 `.config` 中的所有片段设置以及 vmlinux 的 `.BTF` section；
 检查失败则停止镜像打包。源码仍跟随上游分支，没有固定 commit。
-工作流触发方式不变：仓库所有者给自己的仓库加星。
+仓库所有者可以在 Actions 页面通过 Run workflow 手动触发，也可给自己的仓库加星。
+
+## 构建依赖与预装软件
+
+eMMC 辅助包使用官方 `downloads.friendlyelec.com` HTTPS 源，在编译前下载并
+检查 tar 包可读性。每次连接等待最多 15 秒，读取空闲超时 60 秒，最多尝试 3 次，
+下载总时间限制为 20 分钟。仍然生成 SD 和 eMMC 刷机镜像；一个平台失败不再取消另一个。
+此检查验证压缩包完整性，不等同于固定 SHA256 的来源校验。
+
+rootfs 默认安装 `htop`、`tio`、`kitty-terminfo`（Alpine 中的包名）和 `tailscale`，使用 Alpine 3.23
+官方 main/community 软件源。Tailscale 不自动加入 tailnet，也不自动开启服务。
+软件包安装失败会使 rootfs 构建失败，避免发布缺少所需软件的镜像。
 
 ## 启动后检查
 
