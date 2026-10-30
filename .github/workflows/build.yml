@@ -218,6 +218,15 @@ jobs:
             "https://downloads.friendlyelec.com/os-images/${{ matrix.CPU }}/images/emmc-flasher-images.tgz"
           tar -tzf emmc-flasher-images.tgz > /dev/null
 
+          # RK3328: large BTF kernels exceed the legacy MMC bounce-buffer budget.
+          if [ "${{ matrix.CPU }}" = "rk3328" ]; then
+            git clone --depth 1 -b nanopi-r2-v2017.09 \
+              https://github.com/friendlyarm/uboot-rockchip.git uboot
+            UBOOT_PATCH="$(pwd)/../../patches/uboot/rk3328/0001-bound-mmc-bounce-buffer.patch"
+            git -C uboot apply --check "$UBOOT_PATCH"
+            git -C uboot apply "$UBOOT_PATCH"
+          fi
+
           # build uboot
           UBOOT_SRC=uboot ./build-uboot.sh ${OS_DIR}
 
